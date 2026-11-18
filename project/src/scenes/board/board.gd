@@ -82,10 +82,29 @@ func get_tile_by_value(value: int) -> PuzzleTile:
 
 func _ready() -> void:
 	grid_size = maxi(2, grid_size)
-	# Use the scene's Control width (320), not the old exported grid size.
-	tile_size = floorf(size.x / float(grid_size))
-	size = Vector2.ONE * tile_size * grid_size
+	# In exported builds the parent container may not have laid this node out yet,
+	# so size can still be zero here. Keep the exported tile_size as a fallback and
+	# re-layout once the real size arrives via the resized signal.
+	_update_tile_size()
 	gen_board()
+	resized.connect(_on_resized)
+
+func _update_tile_size() -> void:
+	if size.x > 0.0:
+		tile_size = floorf(size.x / float(grid_size))
+
+func _on_resized() -> void:
+	var old_tile_size: float = tile_size
+	_update_tile_size()
+	if is_equal_approx(tile_size, old_tile_size):
+		return
+	_cancel_tile_slides()
+	for r: int in range(grid_size):
+		for c: int in range(grid_size):
+			if board[r][c] != 0:
+				set_tile_position(r, c, board[r][c])
+	for tile: PuzzleTile in tiles:
+		tile.update_size(grid_size, tile_size)
 
 func _cancel_tile_slides() -> void:
 	for tile: PuzzleTile in tiles:
@@ -219,7 +238,7 @@ func set_tile_numbers(state: bool) -> void:
 func update_size(new_size: int) -> void:
 	_cancel_tile_slides()
 	grid_size = maxi(2, new_size)
-	tile_size = floorf(size.x / float(grid_size))
+	_update_tile_size()
 	gen_board()
 	game_state = GAME_STATES.NOT_STARTED
 	reset_move_count()
